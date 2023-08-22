@@ -130,7 +130,7 @@ function getUrl(path) {
 }
 
 function catchHandler(method, path, err) {
-    console.error(`${method} ${path} ERROR\n${err.message}`);
+    console.error(`${method} ${path} ERROR\n${err.message}\n`);
     process.exit(1);
 }
 
