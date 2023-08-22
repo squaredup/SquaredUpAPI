@@ -129,13 +129,18 @@ function getUrl(path) {
     return `${baseUrl}${path}${apiKeySeperator}apiKey=${apiKey}`;
 }
 
+function catchHandler(err) {
+    console.log(err.message);
+    process.exit(1);
+}
+
 async function POST(path, body) {
     try {
         const response = await axios.post(getUrl(path), body);
         const id = response.data;
         return id;
     } catch (err) {
-        console.log(err);
+        catchHandler(err);
     }
 }
 
@@ -143,7 +148,7 @@ async function PUT(path, body) {
     try {
         await axios.put(getUrl(path), body);
     } catch (err) {
-        console.log(err);
+        catchHandler(err);
     }
 }
 
@@ -153,7 +158,7 @@ async function GET(path) {
         const body = response.data;
         return body;
     } catch (err) {
-        console.log(err);
+        catchHandler(err);
     }
 }
 
@@ -161,6 +166,6 @@ async function DELETE(path) {
     try {
         await axios.delete(getUrl(path));
     } catch (err) {
-        console.log(err);
+        catchHandler(err);
     }
 }
