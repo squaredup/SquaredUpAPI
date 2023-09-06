@@ -1,0 +1,69 @@
+{
+  "_type": "layout/grid",
+  "contents": [
+    {
+      "w": 4,
+      "h": 2,
+      "x": 0,
+      "y": 0,
+      "i": "b9dcb27d-3c64-65ab-733d-cb1e456d74e3",
+      "moved": false,
+      "static": false,
+      "config": {
+        "_type": "tile/data-stream",
+        "description": "Scoped to EC2 EksPrometheusDemoCluster-WorkerNodes",
+        "title": "CPU",
+        "dataStream": {
+          "pluginConfigId": "{{pluginDataSourceId}}",
+          "id": "{{cpuDataStreamId}}"
+        },
+        "visualisation": {
+          "type": "data-stream-line-graph",
+          "config": {
+            "data-stream-line-graph": {
+              "shading": false,
+              "yAxisLabel": "CPU Utilisation",
+              "yAxisRangeFrom": 0,
+              "dataPoints": false,
+              "showGrid": true,
+              "yAxisRangeMode": "auto",
+              "yAxisRangeTo": 100
+            }
+          }
+        },
+        "scope": {
+          "query": "g.V().has('__search', containing(query_f88ujtxrFtVIiY5clIyh)).order().by('__name').hasNot('__canonicalType').has(\"__configId\", \"config-aUfR9I7IoJIWDSHbVtt4\").or(__.has(\"sourceType\", \"AWS::EC2::Instance\")).limit(500)",
+          "bindings": {
+            "query_f88ujtxrFtVIiY5clIyh": "eksprometheusdemocluster-workernodes"
+          },
+          "queryDetail": {
+            "query": "EksPrometheusDemoCluster-WorkerNodes"
+          }
+        }
+      }
+    },
+    {
+      "w": 4,
+      "h": 3,
+      "x": 0,
+      "y": 2,
+      "i": "e7cca19e-2d58-42ba-895e-da0f397c58c4",
+      "moved": false,
+      "static": false,
+      "config": {
+        "_type": "tile/data-stream",
+        "description": "Unscoped",
+        "title": "All AWS Support Cases",
+        "dataStream": {
+          "pluginConfigId": "{{pluginDataSourceId}}",
+          "id": "{{supportCasesDataStreamId}}"
+        },
+        "visualisation": {
+          "type": "data-stream-table"
+        }
+      }
+    }
+  ],
+  "version": 13,
+  "columns": 4
+}
