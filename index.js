@@ -10,7 +10,30 @@ const namePrefix = '[API Test]';
 // all resources ever created by this script
 const performCleanup = false;
 
+// Alerting channel type Ids
+const ChannelTypeIds = {
+    SlackAPI: 'channeltype-00000000000000000001',
+    SlackWebHook: 'channeltype-00000000000000000002',
+    Teams: 'channeltype-00000000000000000003',
+    Custom: 'channeltype-00000000000000000004',
+    ServiceNow: 'channeltype-00000000000000000005',
+    Email: 'channeltype-00000000000000000006',
+    Zapier: 'channeltype-00000000000000000007'
+};
+
+// List existing alerting channels (name uniqueness enforced)
+const channels = await GET('/alerting/channels');
+const channelName = `${namePrefix} email alerting channel`;
+let channel = channels.find((channel) => channel.displayName === channelName);
+// Create email alerting channel if it doesn't already exist
+if (!channel) {
+    channel = await createEmailChannel(channelName);
+}
+
+// List existing plugin data sources
 const pluginDataSources = await GET('/source/configs?type=source.plugin');
+
+// List existing workspaces
 const workspaces = await GET('/workspaces');
 
 // Create a new workspace
@@ -25,7 +48,10 @@ console.log('\n========== WORKSPACE ==========\n');
 console.log(JSON.stringify(newWorkspace, null, 2));
 
 // Create a new dashboard using the 'AWS Production' data source
-const pluginDataSource = pluginDataSources.filter((ds) => ds.displayName === 'AWS Production')[0];
+const pluginDataSource = pluginDataSources.find(
+    (ds) => ds.displayName === 'AWS Production'
+);
+
 if (pluginDataSource) {
     let dashboard = await createDashboard(newWorkspaceId, pluginDataSource);
 
@@ -45,16 +71,45 @@ if (pluginDataSource) {
 }
 
 if (performCleanup) {
-    const toDelete = (await GET('/workspaces')).filter((workspace) => {
+    // Cleanup workspaces
+    let toDelete = (await GET('/workspaces')).filter((workspace) => {
         return workspace.displayName.startsWith(namePrefix);
     });
     await Promise.all(toDelete.map((workspace) => {
         return DELETE(`/workspaces/${workspace.id}`);
     }));
     console.log(`\nWORKSPACES with name prefix '${namePrefix}' DELETED\n`);
+
+    // Cleanup alerting channels
+    toDelete = (await GET('/alerting/channels')).filter((channel) => {
+        return channel.displayName.startsWith(namePrefix);
+    });
+    await Promise.all(toDelete.map((channel) => {
+        return DELETE(`/alerting/channels/${channel.id}`);
+    }));
+    console.log(`\nALERTING CHANNELS with name prefix '${namePrefix}' DELETED\n`);
 }
 
 console.log('\n========== FINISHED ==========\n');
+
+// ========== ALERTING CHANNEL FUNCTIONS ==========
+
+async function createEmailChannel(channelName) {
+    const body = {
+        displayName: channelName,
+        description: 'Description for email channel',
+        channelTypeId: ChannelTypeIds.Email,
+        enabled: true,
+        config: {
+            emailAddresses: [
+                { value: 'alert-user-1@acme.com', label: 'Alert User 1' },
+                { value: 'alert-user-2@acme.com', label: 'Alert User 2' }
+            ]
+        }
+    };
+    const channel = await POST('/alerting/channels', body);
+    return channel;
+}
 
 // ========== WORKSPACE FUNCTIONS ==========
 
@@ -71,6 +126,9 @@ async function createWorkspace() {
         //     { subjectId: 'read-write-user@acme.com', permissions: ['RW'] },
         //     { subjectId: 'read-only-user@acme.com', permissions: ['RO'] }
         // ],
+        // Specify alerting rules for the workspace, see updateWorkspace
+        // below for an example configuration
+        alertingRules: [],
         links: {
             // The plugin data sources this workspace can read data from.
             // You will likely want to filter this array.
@@ -107,6 +165,50 @@ async function updateWorkspace(workspaceId) {
         // and acl will be unchanged
         // Specify acl: null to disable restrictions for this workspace
         acl: null,
+        // Specify alerting rules for the workspace to change them
+        alertingRules: [
+            {
+                channels: [
+                    {
+                        // Use the email channel created earlier
+                        id: channel.id,
+                        // Whether to include a tile preview image
+                        // in the alerting channel notifications
+                        includePreviewImage: false
+                    }
+                ],
+                conditions: {
+                    monitors: {
+                        // Generate notifications when the workspace health changes
+                        rollupHealth: false,
+                        // Generate notifications when the health of any dashboard
+                        // in the workspace changes
+                        dashboardRollupHealth: false,
+                        // OR generate notifications when the health of specific
+                        // dashboards / tiles in the workspace changes
+                        // dashboards: {
+                        //     'dash-MEYWu1h6nEfXcjKWGW2Q': {
+                        //         // Generate notifications when the dashboard health changes
+                        //         rollupHealth: false,
+                        //         // Generate notifications when the health of specific tiles
+                        //         // on the dashboard changes
+                        //         // tiles: {
+                        //         //     'b9dcb27d-3c64-65ab-733d-cb1e456d74e3': {
+                        //         //         include: true
+                        //         //     }
+                        //         // },
+                        //         // OR generate notifications when the health of any tile
+                        //         // on the dashboard changes
+                        //         includeAllTiles: true
+                        //     }
+                        // },
+                        // OR generate notifications when the health of any tile
+                        // in the workspace changes
+                        includeAllTiles: true
+                    }
+                }
+            }
+        ],
         // Specify new links if you want to change them otherwise don't
         // and links will be unchanged
         // links: {
@@ -136,6 +238,7 @@ async function readWorkspace(workspaceId) {
     return {
         id: workspace.id,
         displayName: workspace.displayName,
+        alertingRules: workspace.data.alertingRules,
         links: workspace.data.links,
         properties: workspace.data.properties,
         acl: await GET(`/accesscontrol/acl/${workspaceId}`)
@@ -151,8 +254,12 @@ async function createDashboard(workspaceId, pluginDataSource) {
     const template = fs.readFileSync('dashboardTemplate.json').toString();
     const templateBindings = {
         pluginDataSourceId: pluginDataSource.id,
-        cpuDataStreamId: pluginDataStreams.filter((ds) => ds.displayName === 'CPU')[0].id,
-        supportCasesDataStreamId: pluginDataStreams.filter((ds) => ds.displayName === 'All AWS Support Cases')[0].id
+        cpuDataStreamId: pluginDataStreams.find(
+            (ds) => ds.displayName === 'CPU'
+        )?.id,
+        supportCasesDataStreamId: pluginDataStreams.find(
+            (ds) => ds.displayName === 'All AWS Support Cases'
+        )?.id
     };
 
     const contentJSON = mustache.render(template, templateBindings);
